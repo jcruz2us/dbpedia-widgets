@@ -10,6 +10,6 @@
 	}
 
 	angular.module('gulp-ng')
-		.value('proxyLocation', 'http://localhost:8000/resource')
+		.value('proxyLocation', 'http://107.170.195.163:8000/resource')
 		.factory('resource', resource);
 })();
