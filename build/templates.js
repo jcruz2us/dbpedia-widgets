@@ -1,0 +1,2 @@
+angular.module("templates", []).run(["$templateCache", function($templateCache) {$templateCache.put("detail/detail.html","<br/>\n<dbpedia-resource-view resource=\"resource\" ng-if=\"resource\">\n</dbpedia-resource-view>");
+$templateCache.put("main/main.html","");}]);
