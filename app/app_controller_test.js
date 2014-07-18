@@ -3,16 +3,20 @@
 describe("app_controller_test", function(){
     var scope,
         location,
-        ctrl;
+        ctrl,
+        $window;
 
     beforeEach(module('gulp-ng'));
 
-    beforeEach(inject(function($controller, $rootScope, _$location_) {
+    beforeEach(inject(function($controller, $rootScope, _$location_, _$window_) {
         scope = $rootScope.$new();
         location = _$location_;
+        $window = _$window_;
+
         ctrl = $controller('ApplicationCtrl', {
                     $scope: scope,
-                    $location: location
+                    $location: location,
+                    $window: $window
                 });
 
         //https://docs.angularjs.org/api/ng/type/$rootScope.Scope#$watch
@@ -39,4 +43,17 @@ describe("app_controller_test", function(){
     	expect(location.path()).toBe("/detail");
     	expect(location.search().uri).toBe("http://dbpedia.org/resource/Tupac_Shakur");
 	});
+
+    it('should notify google analytics on every routeChangeSuccess event', function () {
+        $window.ga = function () {};
+        spyOn($window, 'ga');
+        
+        //mock the path fn output
+        location.url = function () {
+            return "#/detail?uri=http://dbpedia.org/resource/Sample";
+        };
+
+        scope.$emit('$routeChangeSuccess');
+        expect($window.ga).toHaveBeenCalledWith('send', 'pageview', location.url());
+    });
 });
