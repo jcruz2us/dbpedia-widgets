@@ -16,7 +16,7 @@
 	'use strict';
 
 	angular.module('gulp-ng')
-			.controller('ApplicationCtrl', ['$scope', '$location', function ($scope, $location) {
+			.controller('ApplicationCtrl', ['$scope', '$location', '$window', function ($scope, $location, $window) {
 				//$scope.resourceSelected = {};
 				$scope.$watch('resourceSelected', function (newVal, oldVal) {
 					if (newVal === oldVal){ //no change
@@ -25,6 +25,10 @@
 
 					$location.path('/detail');
 					$location.search('uri', newVal.uri);
+				});
+
+				$scope.$on('$routeChangeSuccess', function (evnt) {
+					$window.ga('send', 'pageview', $location.url());
 				});
 			}]);
 })();
@@ -196,7 +200,7 @@
 			template: 
 			//'<div class="wrapper" ng-if="results">' +
 				'<img dbpedia-depiction resource="resource" />' +
-				'<label class="heading">{{ resource.label }}</label>'+
+				'<a class="heading" href="{{ resource.wikipedia }}" target="_blank">{{ resource.label }}</a>'+
 				'<p class="comment">{{ resource.comment }}</p>' + 
 				'<div class="clear"></div>' + 
 				'<ul>' +
