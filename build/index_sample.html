@@ -4,15 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no, width=device-width">
     <title>gulp-ng</title>
-    <link rel="stylesheet" type="text/css" href="//cdnjs.cloudflare.com/ajax/libs/normalize/3.0.1/normalize.min.css">
-    <!-- <link href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet"> -->
+    <link href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="lib.css" rel="stylesheet">
     <link href="app.css" rel="stylesheet">
-    <link href="embed-mode.css" rel="stylesheet">
   </head>
   <body>
 
-    <header ng-show="!embed">
+    <header ng-if="!embed">
       <div class="container">
         <div class="navbar-header">
           <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" style="display: none;">
@@ -26,7 +24,7 @@
           </a>
         </div>
 
-        <div class="navbar-collapse collapse" id="bs-example-navbar-collapse-1">
+        <div class="navbar-collapse collapse" id="bs-example-navbar-collapse-1" style="height: 1px;">
           <form class="navbar-form navbar-left" role="search" style="">
             <div class="form-group">
               <dbpedia-autosuggest placeholder="Search..." selection="resourceSelected" />
@@ -51,6 +49,14 @@
             </li>
           </ul> -->
         </div>
+
+        
+        
+
+        
+
+        
+
       </div>      
     </header>
 

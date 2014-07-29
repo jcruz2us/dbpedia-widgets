@@ -9190,7 +9190,7 @@ return jQuery;
 }));
 
 /**
- * @license AngularJS v1.3.0-build.2821+sha.0ebab08
+ * @license AngularJS v1.3.0-build.2857+sha.1f6a5a1
  * (c) 2010-2014 Google, Inc. http://angularjs.org
  * License: MIT
  */
@@ -9259,7 +9259,7 @@ function minErr(module) {
       return match;
     });
 
-    message = message + '\nhttp://errors.angularjs.org/1.3.0-build.2821+sha.0ebab08/' +
+    message = message + '\nhttp://errors.angularjs.org/1.3.0-build.2857+sha.1f6a5a1/' +
       (module ? module + '/' : '') + code;
     for (i = 2; i < arguments.length; i++) {
       message = message + (i == 2 ? '?' : '&') + 'p' + (i-2) + '=' +
@@ -9284,6 +9284,7 @@ function minErr(module) {
     -nodeName_,
     -uid,
     -REGEX_STRING_REGEXP,
+    -VALIDITY_STATE_PROPERTY,
 
     -lowercase,
     -uppercase,
@@ -9375,6 +9376,10 @@ function minErr(module) {
 
 var REGEX_STRING_REGEXP = /^\/(.+)\/([a-z]*)$/;
 
+// The name of a form control's ValidityState property.
+// This is used so that it's possible for internal tests to create mock ValidityStates.
+var VALIDITY_STATE_PROPERTY = 'validity';
+
 /**
  * @ngdoc function
  * @name angular.lowercase
@@ -9437,7 +9442,7 @@ var /** holds major version number for IE or NaN for real browsers */
     angular           = window.angular || (window.angular = {}),
     angularModule,
     nodeName_,
-    uid               = ['0', '0', '0'];
+    uid               = 0;
 
 /**
  * IE 11 changed the format of the UserAgent string.
@@ -9499,8 +9504,9 @@ function isArrayLike(obj) {
  * @param {Object=} context Object to become context (`this`) for the iterator function.
  * @returns {Object|Array} Reference to `obj`.
  */
+
 function forEach(obj, iterator, context) {
-  var key;
+  var key, length;
   if (obj) {
     if (isFunction(obj)) {
       for (key in obj) {
@@ -9513,8 +9519,9 @@ function forEach(obj, iterator, context) {
     } else if (obj.forEach && obj.forEach !== forEach) {
       obj.forEach(iterator, context);
     } else if (isArrayLike(obj)) {
-      for (key = 0; key < obj.length; key++)
+      for (key = 0, length = obj.length; key < length; key++) {
         iterator.call(context, obj[key], key);
+      }
     } else {
       for (key in obj) {
         if (obj.hasOwnProperty(key)) {
@@ -9555,33 +9562,17 @@ function reverseParams(iteratorFn) {
 }
 
 /**
- * A consistent way of creating unique IDs in angular. The ID is a sequence of alpha numeric
- * characters such as '012ABC'. The reason why we are not using simply a number counter is that
- * the number string gets longer over time, and it can also overflow, where as the nextId
- * will grow much slower, it is a string, and it will never overflow.
+ * A consistent way of creating unique IDs in angular.
  *
- * @returns {string} an unique alpha-numeric string
+ * Using simple numbers allows us to generate 28.6 million unique ids per second for 10 years before
+ * we hit number precision issues in JavaScript.
+ *
+ * Math.pow(2,53) / 60 / 60 / 24 / 365 / 10 = 28.6M
+ *
+ * @returns {number} an unique alpha-numeric string
  */
 function nextUid() {
-  var index = uid.length;
-  var digit;
-
-  while(index) {
-    index--;
-    digit = uid[index].charCodeAt(0);
-    if (digit == 57 /*'9'*/) {
-      uid[index] = 'A';
-      return uid.join('');
-    }
-    if (digit == 90  /*'Z'*/) {
-      uid[index] = '0';
-    } else {
-      uid[index] = String.fromCharCode(digit + 1);
-      return uid.join('');
-    }
-  }
-  uid.unshift('0');
-  return uid.join('');
+  return ++uid;
 }
 
 
@@ -9827,7 +9818,7 @@ function isRegExp(value) {
  * @returns {boolean} True if `obj` is a window obj.
  */
 function isWindow(obj) {
-  return obj && obj.document && obj.location && obj.alert && obj.setInterval;
+  return obj && obj.window === obj;
 }
 
 
@@ -9899,12 +9890,14 @@ function makeMap(str) {
 if (msie < 9) {
   nodeName_ = function(element) {
     element = element.nodeName ? element : element[0];
-    return (element.scopeName && element.scopeName != 'HTML')
-      ? uppercase(element.scopeName + ':' + element.nodeName) : element.nodeName;
+    return lowercase(
+      (element.scopeName && element.scopeName != 'HTML')
+      ? element.scopeName + ':' + element.nodeName : element.nodeName
+    );
   };
 } else {
   nodeName_ = function(element) {
-    return element.nodeName ? element.nodeName : element[0].nodeName;
+    return lowercase(element.nodeName ? element.nodeName : element[0].nodeName);
   };
 }
 
@@ -9967,10 +9960,10 @@ function arrayRemove(array, value) {
 
 function isLeafNode (node) {
   if (node) {
-    switch (node.nodeName) {
-    case "OPTION":
-    case "PRE":
-    case "TITLE":
+    switch (nodeName_(node)) {
+    case "option":
+    case "pre":
+    case "title":
       return true;
     }
   }
@@ -10103,17 +10096,22 @@ function copy(source, destination, stackSource, stackDest) {
  * Creates a shallow copy of an object, an array or a primitive
  */
 function shallowCopy(src, dst) {
+  var i = 0;
   if (isArray(src)) {
     dst = dst || [];
 
-    for ( var i = 0; i < src.length; i++) {
+    for (; i < src.length; i++) {
       dst[i] = src[i];
     }
   } else if (isObject(src)) {
     dst = dst || {};
 
-    for (var key in src) {
-      if (hasOwnProperty.call(src, key) && !(key.charAt(0) === '$' && key.charAt(1) === '$')) {
+    var keys = Object.keys(src);
+
+    for (var l = keys.length; i < l; i++) {
+      var key = keys[i];
+
+      if (!(key.charAt(0) === '$' && key.charAt(1) === '$')) {
         dst[key] = src[key];
       }
     }
@@ -11271,7 +11269,7 @@ function setupModuleLoader(window) {
  * - `codeName` – `{string}` – Code name of the release, such as "jiggling-armfat".
  */
 var version = {
-  full: '1.3.0-build.2821+sha.0ebab08',    // all of these placeholder strings will be replaced by grunt's
+  full: '1.3.0-build.2857+sha.1f6a5a1',    // all of these placeholder strings will be replaced by grunt's
   major: 1,    // package task
   minor: 3,
   dot: 0,
@@ -11505,8 +11503,9 @@ function publishExternalAPI(angular){
  * @returns {Object} jQuery object.
  */
 
+JQLite.expando = 'ng339';
+
 var jqCache = JQLite.cache = {},
-    jqName = JQLite.expando = 'ng' + new Date().getTime(),
     jqId = 1,
     addEventListenerFn = (window.document.addEventListener
       ? function(element, type, fn) {element.addEventListener(type, fn, false);}
@@ -11646,8 +11645,10 @@ function jqLiteClone(element) {
 
 function jqLiteDealoc(element){
   jqLiteRemoveData(element);
-  for ( var i = 0, children = element.childNodes || []; i < children.length; i++) {
-    jqLiteDealoc(children[i]);
+  var childElement;
+  for ( var i = 0, children = element.children, l = (children && children.length) || 0; i < l; i++) {
+    childElement = children[i];
+    jqLiteDealoc(childElement);
   }
 }
 
@@ -11677,7 +11678,7 @@ function jqLiteOff(element, type, fn, unsupported) {
 }
 
 function jqLiteRemoveData(element, name) {
-  var expandoId = element[jqName],
+  var expandoId = element.ng339,
       expandoStore = jqCache[expandoId];
 
   if (expandoStore) {
@@ -11691,17 +11692,17 @@ function jqLiteRemoveData(element, name) {
       jqLiteOff(element);
     }
     delete jqCache[expandoId];
-    element[jqName] = undefined; // ie does not allow deletion of attributes on elements.
+    element.ng339 = undefined; // don't delete DOM expandos. IE and Chrome don't like it
   }
 }
 
 function jqLiteExpandoStore(element, key, value) {
-  var expandoId = element[jqName],
+  var expandoId = element.ng339,
       expandoStore = jqCache[expandoId || -1];
 
   if (isDefined(value)) {
     if (!expandoStore) {
-      element[jqName] = expandoId = jqNextId();
+      element.ng339 = expandoId = jqNextId();
       expandoStore = jqCache[expandoId] = {};
     }
     expandoStore[key] = value;
@@ -11721,7 +11722,10 @@ function jqLiteData(element, key, value) {
   }
 
   if (isSetter) {
-    data[key] = value;
+    // set data only on Elements and Documents
+    if (element.nodeType === 1 || element.nodeType === 9) {
+      data[key] = value;
+    }
   } else {
     if (keyDefined) {
       if (isSimpleGetter) {
@@ -11770,16 +11774,34 @@ function jqLiteAddClass(element, cssClasses) {
   }
 }
 
+
 function jqLiteAddNodes(root, elements) {
+  // THIS CODE IS VERY HOT. Don't make changes without benchmarking.
+
   if (elements) {
-    elements = (!elements.nodeName && isDefined(elements.length) && !isWindow(elements))
-      ? elements
-      : [ elements ];
-    for(var i=0; i < elements.length; i++) {
-      root.push(elements[i]);
+
+    // if a Node (the most common case)
+    if (elements.nodeType) {
+      root[root.length++] = elements;
+    } else {
+      var length = elements.length;
+
+      // if an Array or NodeList and not a Window
+      if (typeof length === 'number' && elements.window !== elements) {
+        if (length) {
+          if (elements.item) {
+            // convert NodeList to an Array to make PhantomJS 1.x happy
+            elements = slice.call(elements);
+          }
+          push.apply(root, elements);
+        }
+      } else {
+        root[root.length++] = elements;
+      }
     }
   }
 }
+
 
 function jqLiteController(element, name) {
   return jqLiteInheritedData(element, '$' + (name || 'ngController' ) + 'Controller');
@@ -11868,7 +11890,7 @@ forEach('multiple,selected,checked,disabled,readOnly,required,open'.split(','), 
 });
 var BOOLEAN_ELEMENTS = {};
 forEach('input,select,option,textarea,button,form,details'.split(','), function(value) {
-  BOOLEAN_ELEMENTS[uppercase(value)] = true;
+  BOOLEAN_ELEMENTS[value] = true;
 });
 var ALIASED_ATTR = {
   'ngMinlength' : 'minlength',
@@ -11881,7 +11903,7 @@ function getBooleanAttrName(element, name) {
   var booleanAttr = BOOLEAN_ATTR[name.toLowerCase()];
 
   // booleanAttr is here twice to minimize DOM access
-  return booleanAttr && BOOLEAN_ELEMENTS[element.nodeName] && booleanAttr;
+  return booleanAttr && BOOLEAN_ELEMENTS[nodeName_(element)] && booleanAttr;
 }
 
 function getAliasedAttrName(element, name) {
@@ -11977,29 +11999,21 @@ forEach({
   },
 
   text: (function() {
-    var NODE_TYPE_TEXT_PROPERTY = [];
-    if (msie < 9) {
-      NODE_TYPE_TEXT_PROPERTY[1] = 'innerText';    /** Element **/
-      NODE_TYPE_TEXT_PROPERTY[3] = 'nodeValue';    /** Text **/
-    } else {
-      NODE_TYPE_TEXT_PROPERTY[1] =                 /** Element **/
-      NODE_TYPE_TEXT_PROPERTY[3] = 'textContent';  /** Text **/
-    }
     getText.$dv = '';
     return getText;
 
     function getText(element, value) {
-      var textProp = NODE_TYPE_TEXT_PROPERTY[element.nodeType];
       if (isUndefined(value)) {
-        return textProp ? element[textProp] : '';
+        var nodeType = element.nodeType;
+        return (nodeType === 1 || nodeType === 3) ? element.textContent : '';
       }
-      element[textProp] = value;
+      element.textContent = value;
     }
   })(),
 
   val: function(element, value) {
     if (isUndefined(value)) {
-      if (nodeName_(element) === 'SELECT' && element.multiple) {
+      if (element.multiple && nodeName_(element) === 'select') {
         var result = [];
         forEach(element.options, function (option) {
           if (option.selected) {
@@ -12030,6 +12044,7 @@ forEach({
    */
   JQLite.prototype[name] = function(arg1, arg2) {
     var i, key;
+    var nodeCount = this.length;
 
     // jqLiteHasClass has only two arguments, but is a getter-only fn, so we need to special-case it
     // in a way that survives minification.
@@ -12039,7 +12054,7 @@ forEach({
       if (isObject(arg1)) {
 
         // we are a write, but the object properties are the key/values
-        for (i = 0; i < this.length; i++) {
+        for (i = 0; i < nodeCount; i++) {
           if (fn === jqLiteData) {
             // data() takes the whole object in jQuery
             fn(this[i], arg1);
@@ -12053,9 +12068,10 @@ forEach({
         return this;
       } else {
         // we are a read, so read the first child.
+        // TODO: do we still need this?
         var value = fn.$dv;
         // Only if we have $dv do we iterate over all, otherwise it is just the first element.
-        var jj = (value === undefined) ? Math.min(this.length, 1) : this.length;
+        var jj = (value === undefined) ? Math.min(nodeCount, 1) : nodeCount;
         for (var j = 0; j < jj; j++) {
           var nodeValue = fn(this[j], arg1, arg2);
           value = value ? value + nodeValue : nodeValue;
@@ -12064,7 +12080,7 @@ forEach({
       }
     } else {
       // we are a write, so apply to all children
-      for (i = 0; i < this.length; i++) {
+      for (i = 0; i < nodeCount; i++) {
         fn(this[i], arg1, arg2);
       }
       // return self for chaining
@@ -12376,16 +12392,16 @@ forEach({
  * @returns {string} hash string such that the same input will have the same hash string.
  *         The resulting string key is in 'type:hashKey' format.
  */
-function hashKey(obj) {
+function hashKey(obj, nextUidFn) {
   var objType = typeof obj,
       key;
 
-  if (objType == 'object' && obj !== null) {
+  if (objType == 'function' || (objType == 'object' && obj !== null)) {
     if (typeof (key = obj.$$hashKey) == 'function') {
       // must invoke on object to keep the right this
       key = obj.$$hashKey();
     } else if (key === undefined) {
-      key = obj.$$hashKey = nextUid();
+      key = obj.$$hashKey = (nextUidFn || nextUid)();
     }
   } else {
     key = obj;
@@ -12397,7 +12413,13 @@ function hashKey(obj) {
 /**
  * HashMap which can use objects as keys
  */
-function HashMap(array){
+function HashMap(array, isolatedUid) {
+  if (isolatedUid) {
+    var uid = 0;
+    this.nextUid = function() {
+      return ++uid;
+    };
+  }
   forEach(array, this.put, this);
 }
 HashMap.prototype = {
@@ -12407,7 +12429,7 @@ HashMap.prototype = {
    * @param value value to store can be any type
    */
   put: function(key, value) {
-    this[hashKey(key)] = value;
+    this[hashKey(key, this.nextUid)] = value;
   },
 
   /**
@@ -12415,7 +12437,7 @@ HashMap.prototype = {
    * @returns {Object} the value for the key
    */
   get: function(key) {
-    return this[hashKey(key)];
+    return this[hashKey(key, this.nextUid)];
   },
 
   /**
@@ -12423,7 +12445,7 @@ HashMap.prototype = {
    * @param key
    */
   remove: function(key) {
-    var value = this[key = hashKey(key)];
+    var value = this[key = hashKey(key, this.nextUid)];
     delete this[key];
     return value;
   }
@@ -12733,7 +12755,7 @@ function annotate(fn, strictDi, name) {
 
 
 /**
- * @ngdoc object
+ * @ngdoc service
  * @name $provide
  *
  * @description
@@ -13040,7 +13062,7 @@ function createInjector(modulesToLoad, strictDi) {
   var INSTANTIATING = {},
       providerSuffix = 'Provider',
       path = [],
-      loadedModules = new HashMap(),
+      loadedModules = new HashMap([], true),
       providerCache = {
         $provide: {
             provider: supportObject(provider),
@@ -13221,8 +13243,7 @@ function createInjector(modulesToLoad, strictDi) {
           : getService(key)
         );
       }
-      if (!fn.$inject) {
-        // this means that we must be an array.
+      if (isArray(fn)) {
         fn = fn[length];
       }
 
@@ -13325,7 +13346,7 @@ function $AnchorScrollProvider() {
     function getFirstAnchor(list) {
       var result = null;
       forEach(list, function(element) {
-        if (!result && lowercase(element.nodeName) === 'a') result = element;
+        if (!result && nodeName_(element) === 'a') result = element;
       });
       return result;
     }
@@ -15150,8 +15171,8 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
         nodeName = nodeName_(this.$$element);
 
         // sanitize a[href] and img[src] values
-        if ((nodeName === 'A' && key === 'href') ||
-            (nodeName === 'IMG' && key === 'src')) {
+        if ((nodeName === 'a' && key === 'href') ||
+            (nodeName === 'img' && key === 'src')) {
           this[key] = value = $$sanitizeUri(value, key === 'src');
         }
 
@@ -15421,10 +15442,10 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
         case 1: /* Element */
           // use the node name: <directive>
           addDirective(directives,
-              directiveNormalize(nodeName_(node).toLowerCase()), 'E', maxPriority, ignoreDirective);
+              directiveNormalize(nodeName_(node)), 'E', maxPriority, ignoreDirective);
 
           // iterate over the attributes
-          for (var attr, name, nName, ngAttrName, value, nAttrs = node.attributes,
+          for (var attr, name, nName, ngAttrName, value, isNgAttr, nAttrs = node.attributes,
                    j = 0, jj = nAttrs && nAttrs.length; j < jj; j++) {
             var attrStartName = false;
             var attrEndName = false;
@@ -15432,9 +15453,11 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
             attr = nAttrs[j];
             if (!msie || msie >= 8 || attr.specified) {
               name = attr.name;
+              value = trim(attr.value);
+
               // support ngAttr attribute binding
               ngAttrName = directiveNormalize(name);
-              if (NG_ATTR_BINDING.test(ngAttrName)) {
+              if (isNgAttr = NG_ATTR_BINDING.test(ngAttrName)) {
                 name = snake_case(ngAttrName.substr(6), '-');
               }
 
@@ -15447,9 +15470,11 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
               nName = directiveNormalize(name.toLowerCase());
               attrsMap[nName] = name;
-              attrs[nName] = value = trim(attr.value);
-              if (getBooleanAttrName(node, nName)) {
-                attrs[nName] = true; // presence means true
+              if (isNgAttr || !attrs.hasOwnProperty(nName)) {
+                  attrs[nName] = value;
+                  if (getBooleanAttrName(node, nName)) {
+                    attrs[nName] = true; // presence means true
+                  }
               }
               addAttrInterpolateDirective(node, directives, value, nName);
               addDirective(directives, nName, 'A', maxPriority, ignoreDirective, attrStartName,
@@ -16162,7 +16187,6 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
           });
           afterTemplateChildLinkFn = compileNodes($compileNode[0].childNodes, childTranscludeFn);
 
-
           while(linkQueue.length) {
             var scope = linkQueue.shift(),
                 beforeTemplateLinkNode = linkQueue.shift(),
@@ -16199,13 +16223,17 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
         });
 
       return function delayedNodeLinkFn(ignoreChildLinkFn, scope, node, rootElement, boundTranscludeFn) {
+        var childBoundTranscludeFn = boundTranscludeFn;
         if (linkQueue) {
           linkQueue.push(scope);
           linkQueue.push(node);
           linkQueue.push(rootElement);
-          linkQueue.push(boundTranscludeFn);
+          linkQueue.push(childBoundTranscludeFn);
         } else {
-          afterTemplateNodeLinkFn(afterTemplateChildLinkFn, scope, node, rootElement, boundTranscludeFn);
+          if (afterTemplateNodeLinkFn.transcludeOnThisElement) {
+            childBoundTranscludeFn = createBoundTranscludeFn(scope, afterTemplateNodeLinkFn.transclude, boundTranscludeFn);
+          }
+          afterTemplateNodeLinkFn(afterTemplateChildLinkFn, scope, node, rootElement, childBoundTranscludeFn);
         }
       };
     }
@@ -16235,18 +16263,26 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
       if (interpolateFn) {
         directives.push({
           priority: 0,
-          compile: valueFn(function textInterpolateLinkFn(scope, node) {
-            var parent = node.parent(),
-                bindings = parent.data('$binding') || [];
-            // Need to interpolate again in case this is using one-time bindings in multiple clones
-            // of transcluded templates.
-            interpolateFn = $interpolate(text);
-            bindings.push(interpolateFn);
-            safeAddClass(parent.data('$binding', bindings), 'ng-binding');
-            scope.$watch(interpolateFn, function interpolateFnWatchAction(value) {
-              node[0].nodeValue = value;
-            });
-          })
+          compile: function textInterpolateCompileFn(templateNode) {
+            // when transcluding a template that has bindings in the root
+            // then we don't have a parent and should do this in the linkFn
+            var parent = templateNode.parent(), hasCompileParent = parent.length;
+            if (hasCompileParent) safeAddClass(templateNode.parent(), 'ng-binding');
+
+            return function textInterpolateLinkFn(scope, node) {
+              var parent = node.parent(),
+                  bindings = parent.data('$binding') || [];
+              // Need to interpolate again in case this is using one-time bindings in multiple clones
+              // of transcluded templates.
+              interpolateFn = $interpolate(text);
+              bindings.push(interpolateFn);
+              parent.data('$binding', bindings);
+              if (!hasCompileParent) safeAddClass(parent, 'ng-binding');
+              scope.$watch(interpolateFn, function interpolateFnWatchAction(value) {
+                node[0].nodeValue = value;
+              });
+            };
+          }
         });
       }
     }
@@ -16273,8 +16309,8 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
       var tag = nodeName_(node);
       // maction[xlink:href] can source SVG.  It's not limited to <maction>.
       if (attrNormalizedName == "xlinkHref" ||
-          (tag == "FORM" && attrNormalizedName == "action") ||
-          (tag != "IMG" && (attrNormalizedName == "src" ||
+          (tag == "form" && attrNormalizedName == "action") ||
+          (tag != "img" && (attrNormalizedName == "src" ||
                             attrNormalizedName == "ngSrc"))) {
         return $sce.RESOURCE_URL;
       }
@@ -16288,7 +16324,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
       if (!interpolateFn) return;
 
 
-      if (name === "multiple" && nodeName_(node) === "SELECT") {
+      if (name === "multiple" && nodeName_(node) === "select") {
         throw $compileMinErr("selmulti",
             "Binding to the 'multiple' attribute is not supported. Element: {0}",
             startingTag(node));
@@ -19081,7 +19117,7 @@ function $LocationProvider(){
       var elm = jqLite(event.target);
 
       // traverse the DOM up to find first A tag
-      while (lowercase(elm[0].nodeName) !== 'a') {
+      while (nodeName_(elm[0]) !== 'a') {
         // ignore rewriting if no A tag (reached root element, or no parent - removed from document)
         if (elm[0] === $rootElement[0] || !(elm = elm.parent())[0]) return;
       }
@@ -20413,7 +20449,8 @@ function $ParseProvider() {
             if (oneTimeParseFn.$$unwatch && self && self.$$postDigestQueue) {
               self.$$postDigestQueue.push(function () {
                 // create a copy if the value is defined and it is not a $sce value
-                if ((stable = isDefined(lastValue)) && !lastValue.$$unwrapTrustedValue) {
+                if ((stable = isDefined(lastValue)) &&
+                    (lastValue === null || !lastValue.$$unwrapTrustedValue)) {
                   lastValue = copy(lastValue, null);
                 }
               });
@@ -23040,7 +23077,7 @@ function $SceProvider() {
 
     /**
      * @ngdoc method
-     * @name $sce#parse
+     * @name $sce#parseAs
      *
      * @description
      * Converts Angular {@link guide/expression expression} into a function.  This is like {@link
@@ -24153,6 +24190,7 @@ function formatNumber(number, pattern, groupSep, decimalSep, fractionSize) {
     var match = numStr.match(/([\d\.]+)e(-?)(\d+)/);
     if (match && match[2] == '-' && match[3] > fractionSize + 1) {
       numStr = '0';
+      number = 0;
     } else {
       formatedText = numStr;
       hasExponent = true;
@@ -24167,8 +24205,11 @@ function formatNumber(number, pattern, groupSep, decimalSep, fractionSize) {
       fractionSize = Math.min(Math.max(pattern.minFrac, fractionLen), pattern.maxFrac);
     }
 
-    var pow = Math.pow(10, fractionSize + 1);
-    number = Math.floor(number * pow + 5) / pow;
+    // safely round numbers in JS without hitting imprecisions of floating-point arithmetics
+    // inspired by:
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/round
+    number = +(Math.round(+(number.toString() + 'e' + fractionSize)).toString() + 'e' + -fractionSize);
+
     var fraction = ('' + number).split(DECIMAL_SEP);
     var whole = fraction[0];
     fraction = fraction[1] || '';
@@ -25010,7 +25051,7 @@ var htmlAnchorDirective = valueFn({
  *
  * The buggy way to write it:
  * ```html
- * <img srcset="http://www.gravatar.com/avatar/{{hash}} 2x"/>
+ * <img src="http://www.gravatar.com/avatar/{{hash}} 2x"/>
  * ```
  *
  * The correct way to write it:
@@ -25750,7 +25791,7 @@ var ngFormDirective = formDirectiveFactory(true);
 */
 
 var URL_REGEXP = /^(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?$/;
-var EMAIL_REGEXP = /^[a-z0-9!#$%&'*+/=?^_`{|}~.-]+@[a-z0-9-]+(\.[a-z0-9-]+)*$/i;
+var EMAIL_REGEXP = /^[a-z0-9!#$%&'*+\/=?^_`{|}~.-]+@[a-z0-9-]+(\.[a-z0-9-]+)*$/i;
 var NUMBER_REGEXP = /^\s*(\-|\+)?(\d+|(\d*(\.\d*)))\s*$/;
 var DATE_REGEXP = /^(\d{4})-(\d{2})-(\d{2})$/;
 var DATETIMELOCAL_REGEXP = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)$/;
@@ -26601,15 +26642,29 @@ function validate(ctrl, validatorName, validity, value){
   return validity ? value : undefined;
 }
 
+function testFlags(validity, flags) {
+  var i, flag;
+  if (flags) {
+    for (i=0; i<flags.length; ++i) {
+      flag = flags[i];
+      if (validity[flag]) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
-function addNativeHtml5Validators(ctrl, validatorName, element) {
-  var validity = element.prop('validity');
+// Pass validity so that behaviour can be mocked easier.
+function addNativeHtml5Validators(ctrl, validatorName, badFlags, ignoreFlags, validity) {
   if (isObject(validity)) {
+    ctrl.$$hasNativeValidators = true;
     var validator = function(value) {
       // Don't overwrite previous validation, don't consider valueMissing to apply (ng-required can
       // perform the required validation)
-      if (!ctrl.$error[validatorName] && (validity.badInput || validity.customError ||
-          validity.typeMismatch) && !validity.valueMissing) {
+      if (!ctrl.$error[validatorName] &&
+          !testFlags(validity, ignoreFlags) &&
+          testFlags(validity, badFlags)) {
         ctrl.$setValidity(validatorName, false);
         return;
       }
@@ -26620,8 +26675,9 @@ function addNativeHtml5Validators(ctrl, validatorName, element) {
 }
 
 function textInputType(scope, element, attr, ctrl, $sniffer, $browser) {
-  var validity = element.prop('validity');
+  var validity = element.prop(VALIDITY_STATE_PROPERTY);
   var placeholder = element[0].placeholder, noevent = {};
+  ctrl.$$validityState = validity;
 
   // In composition mode, users are still inputing intermediate text buffer,
   // hold the listener until composition is done.
@@ -26660,16 +26716,16 @@ function textInputType(scope, element, attr, ctrl, $sniffer, $browser) {
       value = trim(value);
     }
 
-    if (ctrl.$viewValue !== value ||
-        // If the value is still empty/falsy, and there is no `required` error, run validators
-        // again. This enables HTML5 constraint validation errors to affect Angular validation
-        // even when the first character entered causes an error.
-        (validity && value === '' && !validity.valueMissing)) {
+    // If a control is suffering from bad input, browsers discard its value, so it may be
+    // necessary to revalidate even if the control's value is the same empty value twice in
+    // a row.
+    var revalidate = validity && ctrl.$$hasNativeValidators;
+    if (ctrl.$viewValue !== value || (value === '' && revalidate)) {
       if (scope.$$phase) {
-        ctrl.$setViewValue(value, event);
+        ctrl.$setViewValue(value, event, revalidate);
       } else {
         scope.$apply(function() {
-          ctrl.$setViewValue(value, event);
+          ctrl.$setViewValue(value, event, revalidate);
         });
       }
     }
@@ -26818,6 +26874,8 @@ function createDateInputType(type, regexp, parseDate, format) {
    };
 }
 
+var numberBadFlags = ['badInput'];
+
 function numberInputType(scope, element, attr, ctrl, $sniffer, $browser) {
   textInputType(scope, element, attr, ctrl, $sniffer, $browser);
 
@@ -26832,7 +26890,7 @@ function numberInputType(scope, element, attr, ctrl, $sniffer, $browser) {
     }
   });
 
-  addNativeHtml5Validators(ctrl, 'number', element);
+  addNativeHtml5Validators(ctrl, 'number', numberBadFlags, null, ctrl.$$validityState);
 
   ctrl.$formatters.push(function(value) {
     return ctrl.$isEmpty(value) ? '' : '' + value;
@@ -26866,23 +26924,19 @@ function numberInputType(scope, element, attr, ctrl, $sniffer, $browser) {
 function urlInputType(scope, element, attr, ctrl, $sniffer, $browser) {
   textInputType(scope, element, attr, ctrl, $sniffer, $browser);
 
-  var urlValidator = function(value) {
-    return validate(ctrl, 'url', ctrl.$isEmpty(value) || URL_REGEXP.test(value), value);
+  ctrl.$validators.url = function(modelValue, viewValue) {
+    var value = modelValue || viewValue;
+    return ctrl.$isEmpty(value) || URL_REGEXP.test(value);
   };
-
-  ctrl.$formatters.push(urlValidator);
-  ctrl.$parsers.push(urlValidator);
 }
 
 function emailInputType(scope, element, attr, ctrl, $sniffer, $browser) {
   textInputType(scope, element, attr, ctrl, $sniffer, $browser);
 
-  var emailValidator = function(value) {
-    return validate(ctrl, 'email', ctrl.$isEmpty(value) || EMAIL_REGEXP.test(value), value);
+  ctrl.$validators.email = function(modelValue, viewValue) {
+    var value = modelValue || viewValue;
+    return ctrl.$isEmpty(value) || EMAIL_REGEXP.test(value);
   };
-
-  ctrl.$formatters.push(emailValidator);
-  ctrl.$parsers.push(emailValidator);
 }
 
 function radioInputType(scope, element, attr, ctrl) {
@@ -27337,7 +27391,7 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
    *        `ngModel.$validators` pipeline which is designed to handle validations with true/false values.
    *
    * @param {string} validationErrorKey Name of the validator. the `validationErrorKey` will assign
-   *        to `$error[validationErrorKey]=isValid` so that it is available for data-binding.
+   *        to `$error[validationErrorKey]=!isValid` so that it is available for data-binding.
    *        The `validationErrorKey` should be in camelCase and will get converted into dash-case
    *        for class name. Example: `myError` will result in `ng-valid-my-error` and `ng-invalid-my-error`
    *        class and can be bound to as  `{{someForm.someControl.$error.myError}}` .
@@ -27516,11 +27570,11 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
    * event defined in `ng-model-options`. this method is rarely needed as `NgModelController`
    * usually handles calling this in response to input events.
    */
-  this.$commitViewValue = function() {
+  this.$commitViewValue = function(revalidate) {
     var viewValue = ctrl.$viewValue;
 
     $timeout.cancel(pendingDebounce);
-    if (ctrl.$$lastCommittedViewValue === viewValue) {
+    if (!revalidate && ctrl.$$lastCommittedViewValue === viewValue) {
       return;
     }
     ctrl.$$lastCommittedViewValue = viewValue;
@@ -27585,14 +27639,14 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
    * @param {string} value Value from the view.
    * @param {string} trigger Event that triggered the update.
    */
-  this.$setViewValue = function(value, trigger) {
+  this.$setViewValue = function(value, trigger, revalidate) {
     ctrl.$viewValue = value;
     if (!ctrl.$options || ctrl.$options.updateOnDefault) {
-      ctrl.$$debounceViewValueCommit(trigger);
+      ctrl.$$debounceViewValueCommit(trigger, revalidate);
     }
   };
 
-  this.$$debounceViewValueCommit = function(trigger) {
+  this.$$debounceViewValueCommit = function(trigger, revalidate) {
     var debounceDelay = 0,
         options = ctrl.$options,
         debounce;
@@ -27611,10 +27665,10 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
     $timeout.cancel(pendingDebounce);
     if (debounceDelay) {
       pendingDebounce = $timeout(function() {
-        ctrl.$commitViewValue();
+        ctrl.$commitViewValue(revalidate);
       }, debounceDelay);
     } else {
-      ctrl.$commitViewValue();
+      ctrl.$commitViewValue(revalidate);
     }
   };
 
@@ -28300,14 +28354,19 @@ var ngModelOptionsDirective = function() {
      </file>
    </example>
  */
-var ngBindDirective = ngDirective(function(scope, element, attr) {
-  element.addClass('ng-binding').data('$binding', attr.ngBind);
-  scope.$watch(attr.ngBind, function ngBindWatchAction(value) {
-    // We are purposefully using == here rather than === because we want to
-    // catch when value is "null or undefined"
-    // jshint -W041
-    element.text(value == undefined ? '' : value);
-  });
+var ngBindDirective = ngDirective({
+  compile: function(templateElement) {
+    templateElement.addClass('ng-binding');
+    return function (scope, element, attr) {
+      element.data('$binding', attr.ngBind);
+      scope.$watch(attr.ngBind, function ngBindWatchAction(value) {
+        // We are purposefully using == here rather than === because we want to
+        // catch when value is "null or undefined"
+        // jshint -W041
+        element.text(value == undefined ? '' : value);
+      });
+    };
+  }
 });
 
 
@@ -29165,7 +29224,7 @@ forEach(
       return {
         compile: function($element, attr) {
           var fn = $parse(attr[directiveName]);
-          return function(scope, element, attr) {
+          return function ngEventHandler(scope, element) {
             element.on(lowercase(name), function(event) {
               scope.$apply(function() {
                 fn(scope, {$event:event});
@@ -30136,7 +30195,7 @@ var ngNonBindableDirective = ngDirective({ terminal: true, priority: 1000 });
  * When one person, perhaps John, views the document, "John is viewing" will be shown.
  * When three people view the document, no explicit number rule is found, so
  * an offset of 2 is taken off 3, and Angular uses 1 to decide the plural category.
- * In this case, plural category 'one' is matched and "John, Marry and one other person are viewing"
+ * In this case, plural category 'one' is matched and "John, Mary and one other person are viewing"
  * is shown.
  *
  * Note that when you specify offsets, you must provide explicit number rules for
@@ -31919,7 +31978,7 @@ var selectDirective = ['$compile', '$parse', function($compile,   $parse) {
                   // rather then the element.
                   (element = optionTemplate.clone())
                       .val(option.id)
-                      .attr('selected', option.selected)
+                      .prop('selected', option.selected)
                       .text(option.label);
                 }
 
