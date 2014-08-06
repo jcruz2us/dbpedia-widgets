@@ -1,7 +1,7 @@
 (function(){
 	'use strict';
 
-	angular.module('gulp-ng', [ 'ngRoute','gulp-ng-main','templates' ])
+	angular.module('gulp-ng', [ 'ngRoute', 'ngSanitize', 'gulp-ng-main', 'templates' ])
 		.config(function ($routeProvider) {
 			
 			$routeProvider
@@ -46,11 +46,34 @@
 					controller: 'DetailCtrl'
 				});
 		})
-		.controller('DetailCtrl', function ($scope, $routeParams, resource) {
+		.controller('DetailCtrl', function ($scope, $routeParams, resource, $location, $sce) {
 			$scope.uri = $routeParams.uri;
 			resource.fetch($scope.uri).then(function (response) {
 				$scope.resource = response.data;
 			});
+			$scope.modalOpen = false;
+			$scope.toggleModal = function () {
+				$scope.modalOpen = !$scope.modalOpen;
+			};
+
+			$scope.getEmbedCode = function () {
+				var iframe = 
+					'<iframe src="' + $scope.getWidgetURL() + '" ' + 
+							'frameborder="0" ' + 
+							'width="350"' +
+							'height="400"' +
+					'/>';
+				return iframe
+				// return $sce.trustAsHtml(iframe);
+			};
+
+			$scope.sanitize = function (str) {
+				return $sce.trustAsHtml(str);
+			};
+
+			$scope.getWidgetURL = function () {
+				return $location.absUrl() + "&embed=true";
+			};
 
 // 			$scope.resource = {
 //     "thumbnail": "http://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Rakim_at_Paid_Dues_4.jpg/200px-Rakim_at_Paid_Dues_4.jpg",
