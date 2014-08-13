@@ -7,9 +7,14 @@ from tornado.testing import AsyncHTTPTestCase
 from tornado.testing import AsyncTestCase
 import tornado.web
 from server import ResourceHandler
+
+import json
+
 # from server import DBpediaEndpoint
 
 from FactService import FactService
+from FactService import ResourceRedirect
+
 from tornado.concurrent import Future
 from tornado.testing import gen_test
 
@@ -48,6 +53,32 @@ class ResourceHandlerTest(AsyncHTTPTestCase):
         response = self.fetch('/resource/' + resourceURI)
         
         self.assertEqual(response.headers['Access-Control-Allow-Origin'], '*')
+
+    @gen_test
+    def test_should_respond_with_redirect_error_when_resource_redirect_exception(self):
+        resourceURI = 'http://dbpedia.org/resource/Sample'
+        # future = Future()
+        # future.set_result(None)
+
+        self._fact_service.get_resource = Mock(side_effect = ResourceRedirect('a', 'b'))#return_value=future)
+        response = self.fetch('/resource/' + resourceURI)
+        
+        self.assertEqual(response.code, 303)
+        self.assertEqual(response.headers['Location'], "/resource/b")
+
+
+    @gen_test
+    def test_should_respond_with_bad_gateway_response_when_fact_service_raises_exception(self):
+        resourceURI = 'http://dbpedia.org/resource/Sample'
+        # future = Future()
+        # future.set_result(None)
+
+        self._fact_service.get_resource = Mock(side_effect = Exception('error'))#return_value=future)
+        response = self.fetch('/resource/' + resourceURI)
+        
+        self.assertEqual(json.loads(response.body.decode()), {})
+        self.assertEqual(response.code, 502)
+        
         
 
 if __name__ == '__main__':

@@ -12,9 +12,19 @@ from tornado.testing import gen_test
 import string
 from DBpediaEndpoint import DBpediaEndpoint
 from FactService import FactService
+from FactService import ResourceRedirect
 from ConfigurableParser import ConfigurableParser
 import json
 from tornado.concurrent import Future
+
+
+class ResourceRedirectTest(AsyncTestCase):
+    def test_constructor_assigns_parameters(self):
+        requested_resource = "original"
+        redirect_resource = "redirect"
+        e = ResourceRedirect(requested_resource, redirect_resource)
+        self.assertEqual(e.requested_resource, requested_resource)
+        self.assertEqual(e.redirect_resource, redirect_resource)
 
 
 class FactServiceTest(AsyncTestCase):
@@ -348,7 +358,12 @@ class FactServiceTest(AsyncTestCase):
     @gen_test
     def test_get_resource_calls_the_configurable_parser(self):
         resourceURI = 'http://dbpedia.org/resource/Sample'
-        with patch.object(ConfigurableParser, 'parse') as mock_parser:
+        future = Future()
+        future.set_result({
+            'predicate': {},
+            'objects': []    
+        })
+        with patch.object(ConfigurableParser, 'parse', return_value=future) as mock_parser:
             resource = yield self.fact_service.get_resource(resourceURI)
             assert mock_parser.called
 
@@ -357,11 +372,66 @@ class FactServiceTest(AsyncTestCase):
         resourceURI = 'http://dbpedia.org/resource/Sample'
         expextedOutput = [{ "id": "Sample", "facts": [] }]
         with patch.object(ConfigurableParser, 'parse') as mock_parser:
-            mock_parser.return_value = expextedOutput
+            future = Future()
+            future.set_result(expextedOutput)
+            mock_parser.return_value = future
             resource = yield self.fact_service.get_resource(resourceURI)
             self.assertEqual(resource['facts'], expextedOutput)
 
 
+    @gen_test
+    def test_get_resource_raises_a_redirect_exception_with_wiki_page_redirect(self):
+        resourceURI = 'http://dbpedia.org/resource/2pac'
+
+        response = [
+            {
+                "o": {
+                    "xml: lang": "en",
+                    "type": "literal",
+                    "value": "2pac"
+                },
+                "p": {
+                    "type": "uri",
+                    "value": "http://www.w3.org/2000/01/rdf-schema#label"
+                },
+                "predicate_label": {
+                    "type": "literal",
+                    "value": "label"
+                }
+            },
+            {
+                 "o": {
+                    "type": "uri",
+                    "value": "http://dbpedia.org/resource/Tupac_Shakur"
+                },
+                "object_label": {
+                    "type": "literal",
+                    "xml:lang": "en",
+                    "value": "Tupac Shakur"
+                },
+                "p": {
+                    "type": "uri",
+                    "value": "http://dbpedia.org/ontology/wikiPageRedirects"
+                },
+                "predicate_label": {
+                    "type": "literal",
+                    "xml:lang": "en",
+                    "value": "Wikipage redirect"
+                }
+            }
+        ]
+
+        future = Future()
+        future.set_result(response)
+
+        self.dbpedia_endpoint.fetch = Mock(return_value=future)
+
+        with self.assertRaises(ResourceRedirect) as context:
+            yield self.fact_service.get_resource(resourceURI)
+
+        
 
 if __name__ == '__main__':
     unittest.main()
+
+

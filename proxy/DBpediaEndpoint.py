@@ -22,7 +22,7 @@ class DBpediaEndpoint(object):
         return facts + inverse_facts
 
     def parse_response(self, response):
-        return json.loads(response.body.decode())['results']['bindings']
+        return json.loads(response.body.replace(b"\U", b"\u").decode())['results']['bindings']
 
 
     def facts_url(self, uri):
@@ -55,6 +55,7 @@ class DBpediaEndpoint(object):
         sparql = string.Template(
             """
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX dbpedia: <http://dbpedia.org/ontology/>
             SELECT DISTINCT ?p ?predicate_label ?o ?object_label WHERE {
                 ?o ?p <$resource>.
                 ?p rdfs:label ?predicate_label.
@@ -62,6 +63,7 @@ class DBpediaEndpoint(object):
 
                 FILTER((LANG(?predicate_label) = "" || langMatches(lang(?predicate_label), "EN")))
                 FILTER(LANG(?object_label) = "" || langMatches(lang(?object_label), "EN"))
+                MINUS { ?o dbpedia:wikiPageRedirects ?r }
             }"""
             ).substitute(resource=uri)
 
