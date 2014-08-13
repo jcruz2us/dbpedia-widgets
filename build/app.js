@@ -73,7 +73,7 @@
 			$scope.getWidgetURL = function () {
 				var absUrl = $location.absUrl();
 
-				if (absUrl.indexOf("index.html")) {
+				if (absUrl.indexOf("index.html") !== -1) {
 					return absUrl.replace("index.html", "embed.html");
 				}
 				else
